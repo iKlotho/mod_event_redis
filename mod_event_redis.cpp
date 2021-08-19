@@ -207,17 +207,17 @@ namespace mod_event_redis
             {
                 for (std::string const &value : filters)
                 {
-                    char *event_name = switch_event_get_header(event, "Event-Name")
-					if (event_name && toString(event_name) == value) {
+                    char *event_name = switch_event_get_header(event, "Event-Name");
+                    if (event_name && toString(event_name) == value)
+                    {
                         any_match = true;
                         break;
-					}
+                    }
                 }
 
                 if (!any_match)
                     return;
             }
-
 
             char *event_json = (char *)malloc(sizeof(char));
             switch_event_serialize_json(event, &event_json);
