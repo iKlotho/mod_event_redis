@@ -139,7 +139,7 @@ namespace mod_event_redis
 
             cpp_redis::active_logger = std::unique_ptr<cpp_redis_fs_logger>(new cpp_redis_fs_logger);
 
-            topic_str = std::string(globals.key)
+            topic_str = std::string(globals.key);
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "RedisEventPublisher Topic : %s", topic_str.c_str());
             if (globals.filters != NULL)
             {
@@ -196,9 +196,8 @@ namespace mod_event_redis
                 _initialized = 1;
 
                 // select the db
-                std::string select_command = "SELECT " + toString(db_number);
-                redisClient.send(select_command, [](cpp_redis::reply &reply)
-                                 { std::cout << "SELECT REPLY" << reply << std::endl; });
+                std::string select_command = "SELECT " + toString(globals.db_number);
+                redisClient.send(select_command, [](cpp_redis::reply &reply){ switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Reply is select (%s)", reply.as_string().c_str())});
             }
             catch (...)
             {
