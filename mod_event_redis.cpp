@@ -181,23 +181,24 @@ namespace mod_event_redis
                 {
                     //! authentication if server-server requires it
                     redisClient.auth(globals.password, [](const cpp_redis::reply &reply)
-                    {
-                        if (reply.is_error())
-                        {
-                            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Redis Connection Authentication failed - Pass(%s) - Error: %s \n", globals.password, reply.as_string().c_str());
-                        }
-                        else
-                        {
-                            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Redis Connection Successful authentication \n");
-                        }
-                    });
+                                     {
+                                         if (reply.is_error())
+                                         {
+                                             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Redis Connection Authentication failed - Pass(%s) - Error: %s \n", globals.password, reply.as_string().c_str());
+                                         }
+                                         else
+                                         {
+                                             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Redis Connection Successful authentication \n");
+                                         }
+                                     });
                 }
 
                 _initialized = 1;
 
                 // select the db
                 std::string select_command = "SELECT " + toString(globals.db_number);
-                redisClient.send(select_command, [](cpp_redis::reply &reply){ switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Reply is select (%s)", reply.as_string().c_str())});
+                redisClient.send(select_command, [](const cpp_redis::reply &reply)
+                                 { switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Reply is select (%s)", reply.as_string().c_str()); });
             }
             catch (...)
             {
