@@ -4,8 +4,11 @@
 		<param name="port" value="6379"/>
 		<!-- <max-events-size> -->
 		<!-- <has-elements> -->
-		<param name="master" value="mymaster" />
-		<param name="sentinels" value=""/>
-		<param name="topic-prefix" value="fs_redis_queue"/>
+		<!--<param name="master" value="mymaster" />-->
+		<!--<param name="sentinels" value=""/>-->
+		<param name="key" value="cdr_queue"/>
+		<param name="db_number" value="2"/>
+		<param name="filters" value="CHANNEL_CREATE, CHANNEL_DESTORY"/>
+		
 	</settings>
  </configuration>

@@ -10,8 +10,9 @@ namespace mod_event_redis {
 		char *master;
 		char *password;
 		char *sentinals;
-		char *topic_prefix;
+		char *key;
 		char *filters;
+		int db_number;
 	} globals;
 
 	SWITCH_MODULE_LOAD_FUNCTION(mod_event_redis_load);
