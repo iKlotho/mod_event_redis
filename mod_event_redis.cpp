@@ -196,8 +196,8 @@ namespace mod_event_redis
                 _initialized = 1;
 
                 // select the db
-                std::string select_command = "SELECT " + toString(globals.db_number);
-                redisClient.send(select_command, [](const cpp_redis::reply &reply)
+                std::vector<std::string> select_cmd = {"SELECT", toString(globals.db_number)};
+                redisClient.send(select_cmd, [](const cpp_redis::reply &reply)
                                  { switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Reply is select (%s)", reply.as_string().c_str()); });
             }
             catch (...)
