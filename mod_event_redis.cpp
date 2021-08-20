@@ -267,7 +267,7 @@ namespace mod_event_redis
         int sadd(const std::string key, const std::string uuid) {
             std::vector<std::string> members = {uuid};
             redisClient.sadd(key, members, [key](cpp_redis::reply &reply){
-                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Added new call to key -> (%s) reply -> (%s).  \n", key, reply.as_integer());
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Added new call to key -> (%s) reply -> (%d).  \n", key, reply.as_integer());
             });
             redisClient.commit();
             return 0;
@@ -276,7 +276,7 @@ namespace mod_event_redis
         int srem(const std::string key, const std::string uuid) {
             std::vector<std::string> members = {uuid};
             redisClient.srem(key, members, [key](cpp_redis::reply &reply){
-                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNINg, "Removed new call to key -> (%s) reply -> (%s).  \n", key, reply.as_integer());
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Removed new call to key -> (%s) reply -> (%d).  \n", key, reply.as_integer());
             });
             redisClient.commit();
             return 0;
