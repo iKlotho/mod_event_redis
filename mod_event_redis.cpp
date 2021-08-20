@@ -315,12 +315,12 @@ namespace mod_event_redis
             // Subscribe to all switch events of any subclass
             // Store a pointer to ourself in the user data
             if (switch_event_bind_removable(modname, SWITCH_EVENT_CHANNEL_CREATE, SWITCH_EVENT_SUBCLASS_ANY, event_handler,
-                                            static_cast<void *>(&_publisher), &_node) != SWITCH_STATUS_SUCCESS)
+                                            static_cast<void *>(&_publisher), &_node_create) != SWITCH_STATUS_SUCCESS)
             {
                 throw std::runtime_error("Couldn't bind to switch events.");
             }
             if (switch_event_bind_removable(modname, SWITCH_EVENT_CHANNEL_DESTROY, SWITCH_EVENT_SUBCLASS_ANY, event_handler_destory,
-                                            static_cast<void *>(&_publisher), &_node) != SWITCH_STATUS_SUCCESS)
+                                            static_cast<void *>(&_publisher), &_node_delete) != SWITCH_STATUS_SUCCESS)
             {
                 throw std::runtime_error("Couldn't bind to switch events.");
             }
@@ -342,7 +342,8 @@ namespace mod_event_redis
         ~RedisEventModule()
         {
             // Unsubscribe from the switch events
-            switch_event_unbind(&_node);
+            switch_event_unbind(&_node_create);
+            switch_event_unbind(&_node_delete);
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Module shut down\n");
         }
 
