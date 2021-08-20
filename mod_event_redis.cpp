@@ -218,9 +218,8 @@ namespace mod_event_redis
 
             char *event_name = switch_event_get_header(event, "Event-Name");
             char *call_direction = switch_event_get_header(event, "Call-Direction");
-            char *uuid = switch_event_get_header(event, "Unique-ID")
-            if (call_direction && strcmp(call_direction, "inbound") == 0)
-            {
+            char *uuid = switch_event_get_header(event, "Unique-ID");
+            if (call_direction && strcmp(call_direction, "inbound") == 0) {
                 // discard
                 return;
             }
@@ -266,7 +265,7 @@ namespace mod_event_redis
 
     private:
         int sadd(const std::string key, const std::string uuid) {
-            std::vector<std::string> members = {uuid}
+            std::vector<std::string> members = {uuid};
             redisClient.sadd(key, members, [key](cpp_redis::reply &reply){
                 switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNINg, "Added new call to key -> (%s) reply -> (%s).  \n", key, reply.as_integer());
             })
@@ -275,7 +274,7 @@ namespace mod_event_redis
         }
 
         int srem(const std::string key, const std::string uuid) {
-            std::vector<std::string> members = {uuid}
+            std::vector<std::string> members = {uuid};
             redisClient.srem(key, members, [key](cpp_redis::reply &reply){
                 switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNINg, "Removed new call to key -> (%s) reply -> (%s).  \n", key, reply.as_integer());
 
@@ -319,7 +318,7 @@ namespace mod_event_redis
             {
                 throw std::runtime_error("Couldn't bind to switch events.");
             }
-            if (switch_event_bind_removable(modname, SWITCH_EVENT_CHANNEL_DESTROY, SWITCH_EVENT_SUBCLASS_ANY, event_handler_destory,
+            if (switch_event_bind_removable(modname, SWITCH_EVENT_CHANNEL_DESTROY, SWITCH_EVENT_SUBCLASS_ANY, event_handler,
                                             static_cast<void *>(&_publisher), &_node_delete) != SWITCH_STATUS_SUCCESS)
             {
                 throw std::runtime_error("Couldn't bind to switch events.");
