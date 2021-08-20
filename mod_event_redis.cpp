@@ -230,20 +230,20 @@ namespace mod_event_redis
 
             char *campaign_id = switch_event_get_header(event, "variable_campaign_id");
             std::string key = "calls:campaign:";
-            int send = 1;
+            int send_to_queue = 1;
             if (_initialized)
             {
                 if (campaign_id) {
                     std::string campaign_key = key + toString(campaign_id);
                     if (event_name && strcmp(event_name, "CHANNEL_CREATE") == 0) {
-                        send = 0; // dont send create events
+                        send_to_queue = 0; // dont send create events
                         sadd(campaign_key, toString(uuid));
                     } else {
                         srem(campaign_key, toString(uuid));
                     }
                 }
                 // only send DESTROY
-                if (send) {
+                if (send_to_queue) {
                     send(event_json_str);
                 }
             }
