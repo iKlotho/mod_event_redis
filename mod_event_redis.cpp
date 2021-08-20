@@ -78,10 +78,10 @@ namespace mod_event_redis
         SWITCH_CONFIG_ITEM("sentinals", SWITCH_CONFIG_STRING, CONFIG_RELOADABLE, &globals.sentinals,
                            "localhost:xxxx", NULL, "hostname", "Redis Sentinals"),
         SWITCH_CONFIG_ITEM("key", SWITCH_CONFIG_STRING, CONFIG_RELOADABLE, &globals.key,
-                           "cdr_queue", NULL, "topic-prefix", "Topic Prefix"),
+                           "cdr_queue", NULL, "key", "Topic Prefix"),
         SWITCH_CONFIG_ITEM("filters", SWITCH_CONFIG_STRING, CONFIG_RELOADABLE, &globals.filters,
                            NULL, NULL, "filters", "Event filters"),
-        SWITCH_CONFIG_ITEM("db_number", SWITCH_CONFIG_STRING, CONFIG_RELOADABLE, &globals.db_number,
+        SWITCH_CONFIG_ITEM("db_number", SWITCH_CONFIG_INT, CONFIG_RELOADABLE, &globals.db_number,
                            0, 0, "db_number", "Db Number"),
         SWITCH_CONFIG_ITEM_END()};
 
@@ -180,25 +180,31 @@ namespace mod_event_redis
                 if (globals.password != NULL)
                 {
                     //! authentication if server-server requires it
-                    redisClient.auth(globals.password, [](const cpp_redis::reply &reply)
-                                     {
-                                         if (reply.is_error())
-                                         {
-                                             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Redis Connection Authentication failed - Pass(%s) - Error: %s \n", globals.password, reply.as_string().c_str());
-                                         }
-                                         else
-                                         {
-                                             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Redis Connection Successful authentication \n");
-                                         }
-                                     });
+                    redisClient.auth(globals.password, [](const cpp_redis::reply &reply)  {
+                        if (reply.is_error())
+                        {
+                            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Redis Connection Authentication failed - Pass(%s) - Error: %s \n", globals.password, reply.as_string().c_str());
+                        }
+                        else
+                        {
+                            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Redis Connection Successful authentication \n");
+                        }
+                    });
                 }
 
                 _initialized = 1;
 
                 // select the db
-                std::vector<std::string> select_cmd = {"SELECT", globals.db_number};
-                redisClient.send(select_cmd, [](const cpp_redis::reply &reply)
-                                 { switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Reply is select (%s)", reply.as_string().c_str()); });
+                redisClient.select(globals.db_number, [](const cpp_redis::reply &reply) {
+                    if (reply.is_error())
+                    {
+                        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Redis Select db failed. DB(%d) - Error: %s \n", globals.db_number, reply.as_string().c_str());
+                    }
+                    else
+                    {
+                        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Redis select successful! \n");
+                    }
+                });
             }
             catch (...)
             {
@@ -206,26 +212,35 @@ namespace mod_event_redis
             }
         }
 
+
         void PublishEvent(switch_event_t *event)
         {
 
             char *event_name = switch_event_get_header(event, "Event-Name");
-            // check if  call event
-            //! TODO: find a way to subscribe just two events
-            if (event_name && strcmp(event_name, "CHANNEL_CREATE") || strcmp(event_name, "CHANNEL_DESTORY"))
+            char *call_direction = switch_event_get_header(event, "Call-Direction");
+            char *uuid = switch_event_get_header(event, "Unique-ID")
+            if (call_direction && strcmp(call_direction, "inbound") == 0)
             {
-                char *call_direction = switch_event_get_header(event, "Call-Direction");
-                if (call_direction && !strcmp(call_direction, "outbound"))
-                {
-                    return;
-                }
+                // discard
+                return;
             }
 
             char *event_json = (char *)malloc(sizeof(char));
             switch_event_serialize_json(event, &event_json);
             std::string event_json_str(event_json);
+
+            char *campaign_id = switch_event_get_header(event, "variable_campaign_id");
+            std::string key = "calls:campaign:";
             if (_initialized)
             {
+                if (campaign_id) {
+                    std::string campaign_key = key + toString(campaign_id);
+                    if (event_name && strcmp(event_name, "CHANNEL_CREATE") == 0) {
+                        sadd(campaign_key, toString(uuid));
+                    } else {
+                        srem(campaign_key, toString(uuid));
+                    }
+                }
                 send(event_json_str);
             }
             else
@@ -250,6 +265,24 @@ namespace mod_event_redis
         }
 
     private:
+        int sadd(const std::string key, const std::string uuid) {
+            std::vector<std::string> members = {uuid}
+            redisClient.sadd(key, members, [key](cpp_redis::reply &reply){
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNINg, "Added new call to key -> (%s) reply -> (%s).  \n", key, reply.as_integer());
+            })
+            redisClient.commit();
+            return 0;
+        }
+
+        int srem(const std::string key, const std::string uuid) {
+            std::vector<std::string> members = {uuid}
+            redisClient.srem(key, members, [key](cpp_redis::reply &reply){
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNINg, "Removed new call to key -> (%s) reply -> (%s).  \n", key, reply.as_integer());
+
+            })
+            redisClient.commit();
+            return 0;
+        }
         int send(const std::string data)
         {
 
@@ -281,7 +314,12 @@ namespace mod_event_redis
 
             // Subscribe to all switch events of any subclass
             // Store a pointer to ourself in the user data
-            if (switch_event_bind_removable(modname, SWITCH_EVENT_ALL, SWITCH_EVENT_SUBCLASS_ANY, event_handler,
+            if (switch_event_bind_removable(modname, SWITCH_EVENT_CHANNEL_CREATE, SWITCH_EVENT_SUBCLASS_ANY, event_handler,
+                                            static_cast<void *>(&_publisher), &_node) != SWITCH_STATUS_SUCCESS)
+            {
+                throw std::runtime_error("Couldn't bind to switch events.");
+            }
+            if (switch_event_bind_removable(modname, SWITCH_EVENT_CHANNEL_DESTROY, SWITCH_EVENT_SUBCLASS_ANY, event_handler_destory,
                                             static_cast<void *>(&_publisher), &_node) != SWITCH_STATUS_SUCCESS)
             {
                 throw std::runtime_error("Couldn't bind to switch events.");
@@ -328,7 +366,8 @@ namespace mod_event_redis
             }
         }
 
-        switch_event_node_t *_node;
+        switch_event_node_t *_node_delete;
+        switch_event_node_t *_node_create;
         RedisEventPublisher _publisher;
     };
 
