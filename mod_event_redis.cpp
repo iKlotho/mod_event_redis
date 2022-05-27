@@ -25,7 +25,7 @@
  * Anthony Minessale II <anthm@freeswitch.org>
  *
  * Contributor(s):
- * 
+ *
  * Kinshuk Bairagi <me@kinshuk.in>
  *
  * mod_event_redis.cpp -- Sends FreeSWITCH events to an Redis Queue
@@ -161,7 +161,7 @@ namespace mod_event_redis
                         _initialized = 0;
                     }
                 };
-                //Todo sentinal
+                // Todo sentinal
                 if (globals.master == NULL)
                 {
                     redisClient.connect(globals.hostname, globals.port, connect_callback, 0, -1, 5000);
@@ -180,22 +180,23 @@ namespace mod_event_redis
                 if (globals.password != NULL)
                 {
                     //! authentication if server-server requires it
-                    redisClient.auth(globals.password, [](const cpp_redis::reply &reply)  {
-                        if (reply.is_error())
-                        {
-                            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Redis Connection Authentication failed - Pass(%s) - Error: %s \n", globals.password, reply.as_string().c_str());
-                        }
-                        else
-                        {
-                            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Redis Connection Successful authentication \n");
-                        }
-                    });
+                    redisClient.auth(globals.password, [](const cpp_redis::reply &reply)
+                                     {
+                            if (reply.is_error())
+                            {
+                                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Redis Connection Authentication failed - Pass(%s) - Error: %s \n", globals.password, reply.as_string().c_str());
+                            }
+                            else
+                            {
+                                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Redis Connection Successful authentication \n");
+                        } });
                 }
 
                 _initialized = 1;
 
                 // select the db
-                redisClient.select(globals.db_number, [](const cpp_redis::reply &reply) {
+                redisClient.select(globals.db_number, [](const cpp_redis::reply &reply)
+                                   {
                     if (reply.is_error())
                     {
                         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Redis Select db failed. DB(%d) - Error: %s \n", globals.db_number, reply.as_string().c_str());
@@ -203,8 +204,7 @@ namespace mod_event_redis
                     else
                     {
                         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Redis select successful! \n");
-                    }
-                });
+                    } });
             }
             catch (...)
             {
@@ -212,14 +212,14 @@ namespace mod_event_redis
             }
         }
 
-
         void PublishEvent(switch_event_t *event)
         {
 
             char *event_name = switch_event_get_header(event, "Event-Name");
             char *call_direction = switch_event_get_header(event, "Call-Direction");
             char *uuid = switch_event_get_header(event, "Unique-ID");
-            if (call_direction && strcmp(call_direction, "inbound") == 0) {
+            if (call_direction && strcmp(call_direction, "inbound") == 0)
+            {
                 // discard
                 return;
             }
@@ -228,23 +228,28 @@ namespace mod_event_redis
             switch_event_serialize_json(event, &event_json);
             std::string event_json_str(event_json);
 
-            char *campaign_id = switch_event_get_header(event, "variable_campaign_id");
-            std::string key = "calls:campaign:";
+            char *call_uid = switch_event_get_header(event, "variable_call_uid");
+            std::string key = "calls:uid:";
             int send_to_queue = 1;
             if (_initialized)
             {
-                if (campaign_id) {
-                    std::string campaign_key = key + toString(campaign_id);
-                    if (event_name && strcmp(event_name, "CHANNEL_CREATE") == 0) {
+                if (call_uid)
+                {
+                    std::string campaign_key = key + toString(call_uid);
+                    if (event_name && strcmp(event_name, "CHANNEL_CREATE") == 0)
+                    {
                         send_to_queue = 0; // dont send create events
                         sadd(campaign_key, toString(uuid));
-                    } else {
+                    }
+                    else
+                    {
                         srem(campaign_key, toString(uuid));
                     }
-			// only send DESTROY
-			if (send_to_queue) {
-			    send(event_json_str);
-			}
+                    // only send DESTROY
+                    if (send_to_queue)
+                    {
+                        send(event_json_str);
+                    }
                 }
             }
             else
@@ -259,7 +264,7 @@ namespace mod_event_redis
 
         void Shutdown()
         {
-            //flush within 1000ms
+            // flush within 1000ms
             redisClient.sync_commit(std::chrono::milliseconds(1000));
         }
 
@@ -269,20 +274,20 @@ namespace mod_event_redis
         }
 
     private:
-        int sadd(const std::string key, const std::string uuid) {
+        int sadd(const std::string key, const std::string uuid)
+        {
             std::vector<std::string> members = {uuid};
-            redisClient.sadd(key, members, [key](cpp_redis::reply &reply){
-                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Added new call to key -> (%s) reply -> (%d).  \n", key, reply.as_integer());
-            });
+            redisClient.sadd(key, members, [key](cpp_redis::reply &reply)
+                             { switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Added new call to key -> (%s) reply -> (%d).  \n", key, reply.as_integer()); });
             redisClient.commit();
             return 0;
         }
 
-        int srem(const std::string key, const std::string uuid) {
+        int srem(const std::string key, const std::string uuid)
+        {
             std::vector<std::string> members = {uuid};
-            redisClient.srem(key, members, [key](cpp_redis::reply &reply){
-                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Removed new call to key -> (%s) reply -> (%d).  \n", key, reply.as_integer());
-            });
+            redisClient.srem(key, members, [key](cpp_redis::reply &reply)
+                             { switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Removed new call to key -> (%s) reply -> (%d).  \n", key, reply.as_integer()); });
             redisClient.commit();
             return 0;
         }
@@ -294,128 +299,126 @@ namespace mod_event_redis
 
             redisClient.lpush(topic_str, lpushData, [len](cpp_redis::reply &reply)
                               {
-                                  switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Published messaged (%zu bytes), redis queue size (%" PRId64 ") messages.  \n", len, reply.as_integer());
-                                  // if (reply.is_string())
-                                  //   do_something_with_string(reply.as_string())
-                              });
-            redisClient.commit();
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Published messaged (%zu bytes), redis queue size (%" PRId64 ") messages.  \n", len, reply.as_integer());
+                // if (reply.is_string())
+                //   do_something_with_string(reply.as_string()) });
+                redisClient.commit();
 
-            return 0;
+                return 0;
         }
 
         std::string topic_str;
         bool _initialized = 0;
         cpp_redis::client redisClient;
-    };
-
-    class RedisEventModule
-    {
-
-    public:
-        RedisEventModule(switch_loadable_module_interface_t **module_interface, switch_memory_pool_t *pool) : _publisher()
-        {
-
-            // Subscribe to all switch events of any subclass
-            // Store a pointer to ourself in the user data
-            if (switch_event_bind_removable(modname, SWITCH_EVENT_CHANNEL_CREATE, SWITCH_EVENT_SUBCLASS_ANY, event_handler,
-                                            static_cast<void *>(&_publisher), &_node_create) != SWITCH_STATUS_SUCCESS)
-            {
-                throw std::runtime_error("Couldn't bind to switch events.");
-            }
-            if (switch_event_bind_removable(modname, SWITCH_EVENT_CHANNEL_DESTROY, SWITCH_EVENT_SUBCLASS_ANY, event_handler,
-                                            static_cast<void *>(&_publisher), &_node_delete) != SWITCH_STATUS_SUCCESS)
-            {
-                throw std::runtime_error("Couldn't bind to switch events.");
-            }
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Subscribed to events\n");
-
-            // Create our module interface registration
-            *module_interface = switch_loadable_module_create_module_interface(pool, modname);
-
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Module loaded completed\n");
         };
 
-        void Shutdown()
+        class RedisEventModule
         {
-            // Send term message
-            _publisher.Shutdown();
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Shutdown requested, flushing publisher\n");
-        }
 
-        ~RedisEventModule()
-        {
-            // Unsubscribe from the switch events
-            switch_event_unbind(&_node_create);
-            switch_event_unbind(&_node_delete);
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Module shut down\n");
-        }
+        public:
+            RedisEventModule(switch_loadable_module_interface_t **module_interface, switch_memory_pool_t *pool) : _publisher()
+            {
 
-    private:
-        // Dispatches events to the publisher
-        static void event_handler(switch_event_t *event)
+                // Subscribe to all switch events of any subclass
+                // Store a pointer to ourself in the user data
+                if (switch_event_bind_removable(modname, SWITCH_EVENT_CHANNEL_CREATE, SWITCH_EVENT_SUBCLASS_ANY, event_handler,
+                                                static_cast<void *>(&_publisher), &_node_create) != SWITCH_STATUS_SUCCESS)
+                {
+                    throw std::runtime_error("Couldn't bind to switch events.");
+                }
+                if (switch_event_bind_removable(modname, SWITCH_EVENT_CHANNEL_DESTROY, SWITCH_EVENT_SUBCLASS_ANY, event_handler,
+                                                static_cast<void *>(&_publisher), &_node_delete) != SWITCH_STATUS_SUCCESS)
+                {
+                    throw std::runtime_error("Couldn't bind to switch events.");
+                }
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Subscribed to events\n");
+
+                // Create our module interface registration
+                *module_interface = switch_loadable_module_create_module_interface(pool, modname);
+
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Module loaded completed\n");
+            };
+
+            void Shutdown()
+            {
+                // Send term message
+                _publisher.Shutdown();
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Shutdown requested, flushing publisher\n");
+            }
+
+            ~RedisEventModule()
+            {
+                // Unsubscribe from the switch events
+                switch_event_unbind(&_node_create);
+                switch_event_unbind(&_node_delete);
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Module shut down\n");
+            }
+
+        private:
+            // Dispatches events to the publisher
+            static void event_handler(switch_event_t *event)
+            {
+                try
+                {
+                    RedisEventPublisher *publisher = static_cast<RedisEventPublisher *>(event->bind_user_data);
+                    publisher->PublishEvent(event);
+                }
+                catch (std::exception ex)
+                {
+                    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Error publishing event via Redis: %s\n",
+                                      ex.what());
+                }
+                catch (...)
+                { // Exceptions must not propogate to C caller
+                    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Unknown error publishing event via Redis\n");
+                }
+            }
+
+            switch_event_node_t *_node_delete;
+            switch_event_node_t *_node_create;
+            RedisEventPublisher _publisher;
+        };
+
+        //*****************************//
+        //           GLOBALS           //
+        //*****************************//
+        std::unique_ptr<RedisEventModule> module;
+
+        //*****************************//
+        //  Module interface funtions  //
+        //*****************************//
+        SWITCH_MODULE_LOAD_FUNCTION(mod_event_redis_load)
         {
             try
             {
-                RedisEventPublisher *publisher = static_cast<RedisEventPublisher *>(event->bind_user_data);
-                publisher->PublishEvent(event);
+                module.reset(new RedisEventModule(module_interface, pool));
+                return SWITCH_STATUS_SUCCESS;
             }
-            catch (std::exception ex)
+            catch (...)
+            { // Exceptions must not propogate to C caller
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error loading Redis Event module\n");
+                return SWITCH_STATUS_GENERR;
+            }
+        }
+
+        SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_event_redis_shutdown)
+        {
+            try
             {
-                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Error publishing event via Redis: %s\n",
+                // Tell the module to shutdown
+                module->Shutdown();
+                // Free the module object
+                module.reset();
+            }
+            catch (std::exception &ex)
+            {
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error shutting down Redis Event module: %s\n",
                                   ex.what());
             }
             catch (...)
             { // Exceptions must not propogate to C caller
-                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Unknown error publishing event via Redis\n");
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Unknown error shutting down Redis Event module\n");
             }
-        }
-
-        switch_event_node_t *_node_delete;
-        switch_event_node_t *_node_create;
-        RedisEventPublisher _publisher;
-    };
-
-    //*****************************//
-    //           GLOBALS           //
-    //*****************************//
-    std::unique_ptr<RedisEventModule> module;
-
-    //*****************************//
-    //  Module interface funtions  //
-    //*****************************//
-    SWITCH_MODULE_LOAD_FUNCTION(mod_event_redis_load)
-    {
-        try
-        {
-            module.reset(new RedisEventModule(module_interface, pool));
             return SWITCH_STATUS_SUCCESS;
         }
-        catch (...)
-        { // Exceptions must not propogate to C caller
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error loading Redis Event module\n");
-            return SWITCH_STATUS_GENERR;
-        }
     }
-
-    SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_event_redis_shutdown)
-    {
-        try
-        {
-            // Tell the module to shutdown
-            module->Shutdown();
-            // Free the module object
-            module.reset();
-        }
-        catch (std::exception &ex)
-        {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error shutting down Redis Event module: %s\n",
-                              ex.what());
-        }
-        catch (...)
-        { // Exceptions must not propogate to C caller
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Unknown error shutting down Redis Event module\n");
-        }
-        return SWITCH_STATUS_SUCCESS;
-    }
-
-}
