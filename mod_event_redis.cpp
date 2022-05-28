@@ -301,123 +301,121 @@ namespace mod_event_redis
                               {
                 switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Published messaged (%zu bytes), redis queue size (%" PRId64 ") messages.  \n", len, reply.as_integer());
                 // if (reply.is_string())
-                //   do_something_with_string(reply.as_string()) }); }); });
-
+                //   do_something_with_string(reply.as_string()) }); }); }); }); });
             redisClient.commit();
-            return 0; });
-        }
+            return 0;
+        };
+
         std::string topic_str;
         bool _initialized = 0;
         cpp_redis::client redisClient;
-    };
-
-    class RedisEventModule
-    {
-
-    public:
-        RedisEventModule(switch_loadable_module_interface_t **module_interface, switch_memory_pool_t *pool) : _publisher()
+        class RedisEventModule
         {
 
-            // Subscribe to all switch events of any subclass
-            // Store a pointer to ourself in the user data
-            if (switch_event_bind_removable(modname, SWITCH_EVENT_CHANNEL_CREATE, SWITCH_EVENT_SUBCLASS_ANY, event_handler,
-                                            static_cast<void *>(&_publisher), &_node_create) != SWITCH_STATUS_SUCCESS)
+        public:
+            RedisEventModule(switch_loadable_module_interface_t **module_interface, switch_memory_pool_t *pool) : _publisher()
             {
-                throw std::runtime_error("Couldn't bind to switch events.");
-            }
-            if (switch_event_bind_removable(modname, SWITCH_EVENT_CHANNEL_DESTROY, SWITCH_EVENT_SUBCLASS_ANY, event_handler,
-                                            static_cast<void *>(&_publisher), &_node_delete) != SWITCH_STATUS_SUCCESS)
+
+                // Subscribe to all switch events of any subclass
+                // Store a pointer to ourself in the user data
+                if (switch_event_bind_removable(modname, SWITCH_EVENT_CHANNEL_CREATE, SWITCH_EVENT_SUBCLASS_ANY, event_handler,
+                                                static_cast<void *>(&_publisher), &_node_create) != SWITCH_STATUS_SUCCESS)
+                {
+                    throw std::runtime_error("Couldn't bind to switch events.");
+                }
+                if (switch_event_bind_removable(modname, SWITCH_EVENT_CHANNEL_DESTROY, SWITCH_EVENT_SUBCLASS_ANY, event_handler,
+                                                static_cast<void *>(&_publisher), &_node_delete) != SWITCH_STATUS_SUCCESS)
+                {
+                    throw std::runtime_error("Couldn't bind to switch events.");
+                }
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Subscribed to events\n");
+
+                // Create our module interface registration
+                *module_interface = switch_loadable_module_create_module_interface(pool, modname);
+
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Module loaded completed\n");
+            };
+
+            void Shutdown()
             {
-                throw std::runtime_error("Couldn't bind to switch events.");
+                // Send term message
+                _publisher.Shutdown();
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Shutdown requested, flushing publisher\n");
             }
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Subscribed to events\n");
 
-            // Create our module interface registration
-            *module_interface = switch_loadable_module_create_module_interface(pool, modname);
+            ~RedisEventModule()
+            {
+                // Unsubscribe from the switch events
+                switch_event_unbind(&_node_create);
+                switch_event_unbind(&_node_delete);
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Module shut down\n");
+            }
 
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Module loaded completed\n");
+        private:
+            // Dispatches events to the publisher
+            static void event_handler(switch_event_t *event)
+            {
+                try
+                {
+                    RedisEventPublisher *publisher = static_cast<RedisEventPublisher *>(event->bind_user_data);
+                    publisher->PublishEvent(event);
+                }
+                catch (std::exception ex)
+                {
+                    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Error publishing event via Redis: %s\n",
+                                      ex.what());
+                }
+                catch (...)
+                { // Exceptions must not propogate to C caller
+                    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Unknown error publishing event via Redis\n");
+                }
+            }
+
+            switch_event_node_t *_node_delete;
+            switch_event_node_t *_node_create;
+            RedisEventPublisher _publisher;
         };
 
-        void Shutdown()
-        {
-            // Send term message
-            _publisher.Shutdown();
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Shutdown requested, flushing publisher\n");
-        }
+        //*****************************//
+        //           GLOBALS           //
+        //*****************************//
+        std::unique_ptr<RedisEventModule> module;
 
-        ~RedisEventModule()
-        {
-            // Unsubscribe from the switch events
-            switch_event_unbind(&_node_create);
-            switch_event_unbind(&_node_delete);
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Module shut down\n");
-        }
-
-    private:
-        // Dispatches events to the publisher
-        static void event_handler(switch_event_t *event)
+        //*****************************//
+        //  Module interface funtions  //
+        //*****************************//
+        SWITCH_MODULE_LOAD_FUNCTION(mod_event_redis_load)
         {
             try
             {
-                RedisEventPublisher *publisher = static_cast<RedisEventPublisher *>(event->bind_user_data);
-                publisher->PublishEvent(event);
+                module.reset(new RedisEventModule(module_interface, pool));
+                return SWITCH_STATUS_SUCCESS;
             }
-            catch (std::exception ex)
+            catch (...)
+            { // Exceptions must not propogate to C caller
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error loading Redis Event module\n");
+                return SWITCH_STATUS_GENERR;
+            }
+        }
+
+        SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_event_redis_shutdown)
+        {
+            try
             {
-                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Error publishing event via Redis: %s\n",
+                // Tell the module to shutdown
+                module->Shutdown();
+                // Free the module object
+                module.reset();
+            }
+            catch (std::exception &ex)
+            {
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error shutting down Redis Event module: %s\n",
                                   ex.what());
             }
             catch (...)
             { // Exceptions must not propogate to C caller
-                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Unknown error publishing event via Redis\n");
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Unknown error shutting down Redis Event module\n");
             }
-        }
-
-        switch_event_node_t *_node_delete;
-        switch_event_node_t *_node_create;
-        RedisEventPublisher _publisher;
-    };
-
-    //*****************************//
-    //           GLOBALS           //
-    //*****************************//
-    std::unique_ptr<RedisEventModule> module;
-
-    //*****************************//
-    //  Module interface funtions  //
-    //*****************************//
-    SWITCH_MODULE_LOAD_FUNCTION(mod_event_redis_load)
-    {
-        try
-        {
-            module.reset(new RedisEventModule(module_interface, pool));
             return SWITCH_STATUS_SUCCESS;
         }
-        catch (...)
-        { // Exceptions must not propogate to C caller
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error loading Redis Event module\n");
-            return SWITCH_STATUS_GENERR;
-        }
     }
-
-    SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_event_redis_shutdown)
-    {
-        try
-        {
-            // Tell the module to shutdown
-            module->Shutdown();
-            // Free the module object
-            module.reset();
-        }
-        catch (std::exception &ex)
-        {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error shutting down Redis Event module: %s\n",
-                              ex.what());
-        }
-        catch (...)
-        { // Exceptions must not propogate to C caller
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Unknown error shutting down Redis Event module\n");
-        }
-        return SWITCH_STATUS_SUCCESS;
-    }
-}
