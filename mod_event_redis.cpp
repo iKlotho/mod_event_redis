@@ -300,8 +300,7 @@ namespace mod_event_redis
             redisClient.lpush(topic_str, lpushData, [len](cpp_redis::reply &reply)
                               {
                 switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Published messaged (%zu bytes), redis queue size (%" PRId64 ") messages.  \n", len, reply.as_integer());
-                // if (reply.is_string())
-                //   do_something_with_string(reply.as_string()) }); }); }); }); });
+                              });
             redisClient.commit();
             return 0;
         };
